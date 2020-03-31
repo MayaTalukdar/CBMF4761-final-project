@@ -83,7 +83,7 @@ convert_ground_truth_entry_to_training_data_funct <- function(ground_truth_entry
   parent_child_pairs <- sapply(seq(1, length(tree$tip.label)), function(x) generate_parent_child_pairs_funct(x, tree))
   names(parent_child_pairs) <- tree$tip.label
 
-  parent_child_pairs_string <- "("
+  parent_child_pairs_string <- "["
   for (currentIndex in seq(1, length(parent_child_pairs)))
   {
     if (parent_child_pairs[currentIndex] == "Child.")
@@ -95,12 +95,12 @@ convert_ground_truth_entry_to_training_data_funct <- function(ground_truth_entry
     {
       parentNodeArray <- sub("^[^_]*_", "", names(parent_child_pairs[currentIndex]))
       childNodeArray <- sub("^[^_]*_", "", parent_child_pairs[currentIndex])
-      parent_child_pairs_string <- paste(parent_child_pairs_string, paste(parentNodeArray, childNodeArray, sep = ", "), "), ", sep = "")
+      parent_child_pairs_string <- paste(parent_child_pairs_string, paste(parentNodeArray, childNodeArray, sep = ", "), "], [", sep = "")
     }
   }
-  parent_child_pairs_string <- paste(substr(parent_child_pairs_string, 1, nchar(parent_child_pairs_string) - 3), ")", sep = "")
+  parent_child_pairs_string <- substr(parent_child_pairs_string, 1, nchar(parent_child_pairs_string) - 3)
   feature_string <- "["
-  feature_string <- paste(feature_string, paste(ground_truth_entry_index, parent_child_pairs_string, sep = ": "), "]", sep = "")
+  feature_string <- paste(feature_string, parent_child_pairs_string, "]", sep = "")
 
   return (feature_string)
 }
