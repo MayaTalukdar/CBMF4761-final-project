@@ -1,3 +1,6 @@
+require("phytools")
+require ("phangorn")
+
 determine_parent_funct <- function(barcode_1, barcode_2)
 {
   mutArray1= sub("^[^_]*_", "", barcode_1)
