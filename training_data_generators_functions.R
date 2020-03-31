@@ -43,7 +43,7 @@ get_parent_barcode_funct <- function(barcode_1, barcode_2)
 convert_DREAM_tree_to_training_data_row_funct <- function(DREAM_tree)
 {
   # create Newick tree
-  tree <- read.newick(DREAM_tree)
+  tree <- read.newick(text = DREAM_tree)
 
   # initialize node lists
   terminalNodeList <- tree$tip.label
