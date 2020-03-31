@@ -1,119 +1,103 @@
+# import necessary packages 
 require("phytools")
 require ("phangorn")
 require("data.table")
 
-determine_parent_funct <- function(barcode_1, barcode_2)
+create_edge_length_table_funct <- function(tree, indexVec)
 {
-  mutArray1= sub("^[^_]*_", "", barcode_1)
-  mutArray2= sub("^[^_]*_", "", barcode_2)
+  # isolate edgeMat and add names 
+  edgeMat <- tree$edge
+  edgeMatNamed <- t(apply(edgeMat, 1, function(x) indexVec[x]))
 
-  if (mutArray1 == mutArray2)
-  {
-    return (barcode_1)
-  }
-  
-  else
-  {
-    for (currentIndex in seq(1, nchar(mutArray1)))
-    {
-      mutArray1CurrentChar <- substr(mutArray1, currentIndex, currentIndex)
-      mutArray2CurrentChar <- substr(mutArray2, currentIndex, currentIndex)
+  # add edge lengths
+  edgeLengthTable <- cbind(edgeMatNamed, tree$edge.length)
+  colnames(edgeLengthTable) <- c("node_1", "node_2", "length")
 
-      if (mutArray1CurrentChar == mutArray2CurrentChar)
-      {
-        next
-      }
-      
-      else if (mutArray1CurrentChar !="1" & mutArray2CurrentChar !="1")
-      {
-        next
-      }
-      
-      else 
-      {
-        if (mutArray1CurrentChar == "1")
-        {
-          return (barcode_1)
-        }
-        
-        else if (mutArray2CurrentChar == "1")
-        {
-          return (barcode_2)
-        }
-      }
-    }
-
-    return (barcode_1)
-  }
+  return (as.data.frame(edgeLengthTable))
 }
 
-generate_parent_child_pairs_funct <- function(currentIndex, tree)
+get_parent_barcode_funct <- function(barcode_1, barcode_2)
 {
-  currentNode <- tree$tip.label[currentIndex]
-  currentNodeArray <- sub("^[^_]*_", "", currentNode)
-  sisterOfCurrentNode <- unlist(getSisters(tree, currentNode, mode = "label")[1])
-  sisterOfCurrentNodeArray <-  sub("^[^_]*_", "", sisterOfCurrentNode)
-  
-  #if the sister node is another terminal
-  if (names(sisterOfCurrentNode) == "tips")
+  parentBarcode <- ""
+
+  for (charIndex in seq(1, nchar(barcode_1)))
   {
-    parentNode <- determine_parent_funct(currentNode, sisterOfCurrentNode)
-    parentNodeArray <- sub("^[^_]*_", "", parentNode)
-    
-    if (parentNodeArray == currentNodeArray & parentNodeArray == sisterOfCurrentNodeArray)
+    barcode1Char <- substr(barcode_1, charIndex, charIndex)
+    barcode2Char <- substr(barcode_2, charIndex, charIndex)
+
+    if (barcode1Char == barcode2Char)
     {
-      return (ifelse(which(tree$tip.label == currentNode) < which(tree$tip.label == sisterOfCurrentNode), sisterOfCurrentNode, "Child."))
+       parentBarcode <- paste(parentBarcode, barcode1Char, sep = "") 
     }
-    return (ifelse(parentNode == currentNode, sisterOfCurrentNode, "Child."))
+
+    # if mismatch, replace with a 1
+    else
+    {
+      parentBarcode <- paste(parentBarcode, "1", sep = "") 
+    }
   }
-  
-  #if the sister node is another node 
-  else 
-  {
-    siblings_vec <- tree$tip.label[unlist(Descendants(tree, sisterOfCurrentNode, type = "tips")[1])]
-    return(determine_parent_funct(siblings_vec[1], siblings_vec[2]))
-  }
+
+  return (parentBarcode)
 }
 
-convert_ground_truth_entry_to_training_data_funct <- function(ground_truth_entry_index, ground_truth_trees)
+convert_DREAM_tree_to_training_data_row_funct <- function(DREAM_tree)
 {
-  ground_truth_entry <- ground_truth_trees[ground_truth_entry_index]
-  tree <- read.newick(text = ground_truth_entry)
-  plotTree(tree, nodes.numbers = TRUE)
-  parent_child_pairs <- sapply(seq(1, length(tree$tip.label)), function(x) generate_parent_child_pairs_funct(x, tree))
-  names(parent_child_pairs) <- tree$tip.label
+  # create Newick tree
+  tree <- read.newick(DREAM_tree)
 
-  parent_child_pairs_string <- "["
-  for (currentIndex in seq(1, length(parent_child_pairs)))
+  # initialize node lists
+  terminalNodeList <- tree$tip.label
+  nonTerminalNodeList <- rev(seq(length(tree$tip.label) + 1, length(tree$tip.label) + tree$Nnode))
+  rootNode <- length(tree$tip.label) + 1
+
+  #initialize index of node names
+  indexVec <- setNames(terminalNodeList, seq(1, length(terminalNodeList)))
+  indexVec <- c(indexVec, setNames(seq(length(tree$tip.label) + 1, length(tree$tip.label) + tree$Nnode), seq(length(tree$tip.label) + 1, length(tree$tip.label) + tree$Nnode)))
+
+  # generate edge length dictionary 
+  edgeLengthTable <- create_edge_length_table_funct(tree, indexVec)
+
+  # initialize list that matches nodes to barcodes 
+  terminalNodeBarcodeList <- sapply(tree$tip.label, function(x) sub("^[^_]*_", "", x))
+  nonTerminalNodeBarcodeList <- setNames(rep(NA, tree$Nnode), rev(seq(length(tree$tip.label) + 1, length(tree$tip.label) + tree$Nnode)))
+  nodeBarcodeList <- c(terminalNodeBarcodeList, nonTerminalNodeBarcodeList)
+
+  # traverse the tree bottom-up, imputing barcodes and adding to our list of parent/child nodes 
+  parentChildListString = "["
+  for (nonTerminalNode in nonTerminalNodeList)
   {
-    if (parent_child_pairs[currentIndex] == "Child.")
+    # get barcodes of children 
+    childOne <- setNames(indexVec[Descendants(tree, nonTerminalNode, type = "children")[1]], NULL)
+    childOneBarcode <- nodeBarcodeList[which(names(nodeBarcodeList) == childOne)]
+    childTwo <- setNames(indexVec[Descendants(tree, nonTerminalNode, type = "children")[2]], NULL)
+    childTwoBarcode <- nodeBarcodeList[which(names(nodeBarcodeList) == childTwo)]
+
+    # fill in parental barcode 
+    parentBarcode <- get_parent_barcode_funct(childOneBarcode, childTwoBarcode)
+    ## force barcode to be all 1s if root node 
+    if (nonTerminalNode == rootNode)
     {
-      next
+      parentBarcode <- "1111111111"
+    }
+    nodeBarcodeList[which(names(nodeBarcodeList) == nonTerminalNode)] <- parentBarcode
+
+    # add string representations 
+    if (parentBarcode != childOneBarcode)
+    {
+      edgeLength = as.numeric(as.character(edgeLengthTable$length[edgeLengthTable$node_1 == nonTerminalNode & edgeLengthTable$node_2 == childOne]))
+      parentChildListString <- paste(parentChildListString, "[", parentBarcode, ", ", childOneBarcode, ", ", edgeLength, "], ", sep = "")
     }
 
-    else 
+    if (parentBarcode != childTwoBarcode)
     {
-      parentNodeArray <- sub("^[^_]*_", "", names(parent_child_pairs[currentIndex]))
-      childNodeArray <- sub("^[^_]*_", "", parent_child_pairs[currentIndex])
-      parent_child_pairs_string <- paste(parent_child_pairs_string, paste(parentNodeArray, childNodeArray, sep = ", "), "], [", sep = "")
+      edgeLength = as.numeric(as.character(edgeLengthTable$length[edgeLengthTable$node_1 == nonTerminalNode & edgeLengthTable$node_2 == childTwo]))
+      parentChildListString <- paste(parentChildListString, "[", parentBarcode, ", ", childTwoBarcode, ", ", edgeLength, "], ", sep = "")
     }
+
   }
-  parent_child_pairs_string <- substr(parent_child_pairs_string, 1, nchar(parent_child_pairs_string) - 3)
-  feature_string <- "["
-  feature_string <- paste(feature_string, parent_child_pairs_string, "]", sep = "")
+parentChildListString = paste(substr(parentChildListString, 1, nchar(parentChildListString) - 2), "]", sep = "")
 
-  return (feature_string)
+return (parentChildListString)
+
 }
 
-convert_DREAM_file_to_training_data_funct <- function(DREAM_data_file_name)
-{
-  DREAM_data <- fread(DREAM_data_file_name)
-  ground_truth_trees <- DREAM_data$ground
-  results <- sapply(seq(1, length(ground_truth_trees)), function(x) convert_ground_truth_entry_to_training_data_funct(x, ground_truth_trees))
-
-
-
-} 
-
-setwd("Desktop/CBMF4761-final-project/Data/")
-DREAM_data_file_name <-  "DREAM_data_intMEMOIR.csv"
