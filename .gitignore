@@ -8,3 +8,5 @@ Data/.Rhistory
 Data/.DS_Store
 Data/.DS_Store
 Data/.DS_Store
+.ipynb_checkpoints/trit_to_distance_mat-checkpoint.ipynb
+*.ipynb
