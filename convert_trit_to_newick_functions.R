@@ -4,8 +4,6 @@ require ("phangorn")
 require("data.table")
 require("ape")
 
-#source necessary functions
-source("training_data_generators_functions.R")
 
 zero_pad_function <- function(word) 
 {
@@ -24,14 +22,20 @@ zero_pad_function <- function(word)
 
 convert_trit_to_newick_funct <- function(index, original_test_data)
 {
-  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/Train_csv/")
+  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/")
+  #source necessary functions
+  source("training_data_generators_functions.R")
   
+  
+  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/Test_csv/")
+  
+  print(index)
   # open up appropriate test file and parse it 
   learned_test_data <- read.csv(paste(index, ".csv", sep = ""))
   learned_test_data <- apply(learned_test_data, 2, as.character)
   learned_test_data[,1] <- sapply(learned_test_data[,1], zero_pad_function)
   learned_test_data[,2] <- sapply(learned_test_data[,2], zero_pad_function)
-  
+
   # create original newick tree and a copy we will manipulate 
   og_newick_tree <- read.newick(text = as.character(original_test_data$ground[index]))
   new_newick_tree <- read.newick(text = as.character(original_test_data$ground[index]))
@@ -105,6 +109,11 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
     {
       new_dist <- learned_test_data[which(learned_test_data[,1] == parent_barcode)[1],3]
     }
+    
+    if (is.na(new_dist))
+    {
+      new_dist <- 1/nrow(og_edge_matrix)
+    }
       
     new_edge_lengths <- c(new_edge_lengths, new_dist)
   }
@@ -114,8 +123,14 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
   
   return (write.tree(new_newick_tree))
 }
-  
-  
+
+#create a list of newick trees from the test data
+setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/")
+original_test_data <- read.csv("Data/DREAM_data_intMEMOIR_test.csv")
+new_newick_tree_list <- sapply(seq(1:nrow(original_test_data)), function(x) convert_trit_to_newick_funct(x, original_test_data))
+
+#write out
+write.csv(new_newick_tree_list, "trained_trees_in_newick_format.csv", row.names = FALSE)
   
   
   
