@@ -26,7 +26,6 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
   #source necessary functions
   source("training_data_generators_functions.R")
   
-  
   setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL/train_csv/")
   
   print(index)
@@ -41,9 +40,8 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
   learned_test_data[,2] <- sapply(learned_test_data[,2], zero_pad_function)
 
   # create original newick tree and a copy we will manipulate 
-  og_newick_tree <- read.newick(text = as.character(original_test_data$ground[index]))
-  new_newick_tree <- read.newick(text = as.character(original_test_data$ground[index]))
-  
+  og_newick_tree <- read.newick(text = as.character(original_test_data$pred[index]))
+  new_newick_tree <- read.newick(text = as.character(original_test_data$pred[index]))
   
   ## TAKEN FROM ANOTHER FUNCTION 
   # initialize node lists
@@ -134,8 +132,8 @@ original_test_data <- read.csv("train_newick.csv")
 new_newick_tree_list <- sapply(seq(nrow(original_test_data)), function(x) convert_trit_to_newick_funct(x, original_test_data))
 
 #write out
-setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL")
-write.csv(new_newick_tree_list, "trained_trees_in_newick_format_train_csv_MAY_3.csv", row.names = FALSE)
+setwd("/Users/mayatalukdar/Desktop/")
+write.csv(new_newick_tree_list, "final_updated_train_newick.csv", row.names = FALSE)
   
   
   
