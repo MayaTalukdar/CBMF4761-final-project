@@ -27,7 +27,7 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
   source("training_data_generators_functions.R")
   
   
-  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL/train_csv/")
+  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL/test_csv/")
   
   print(index)
   # open up appropriate test file and parse it 
@@ -129,13 +129,13 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
 }
 
 #create a list of newick trees from the test data
-setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/")
-original_test_data <- read.csv("Data/DREAM_data_intMEMOIR_train.csv")
+setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL")
+original_test_data <- read.csv("test_newick.csv")
 new_newick_tree_list <- sapply(seq(nrow(original_test_data)), function(x) convert_trit_to_newick_funct(x, original_test_data))
 
 #write out
 setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL")
-write.csv(new_newick_tree_list, "trained_trees_in_newick_format_train_csv_MAY_3.csv", row.names = FALSE)
+write.csv(new_newick_tree_list, "trained_trees_in_newick_format_test_csv_MAY_3.csv", row.names = FALSE)
   
   
   
