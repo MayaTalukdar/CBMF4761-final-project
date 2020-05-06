@@ -22,20 +22,21 @@ zero_pad_function <- function(word)
 
 convert_trit_to_newick_funct <- function(index, original_test_data)
 {
-  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/")
   #source necessary functions
-  source("training_data_generators_functions.R")
-  
-  setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL/train_csv/")
-  
+  source("../../../Pre-Processing/Code/training_data_generators_functions.R")
+    
   print(index)
   # open up appropriate test file and parse it 
   learned_test_data <- read.csv(paste(index, ".csv", sep = ""))
   learned_test_data <- apply(learned_test_data, 2, as.character)
+
+  # weird edge case in which there is only one trit
   if (index == 53)
   {
     learned_test_data <- t(learned_test_data)
   }
+
+  # pad rows with zeroes 
   learned_test_data[,1] <- sapply(learned_test_data[,1], zero_pad_function)
   learned_test_data[,2] <- sapply(learned_test_data[,2], zero_pad_function)
 
@@ -127,12 +128,10 @@ convert_trit_to_newick_funct <- function(index, original_test_data)
 }
 
 #create a list of newick trees from the test data
-setwd("/Users/mayatalukdar/Desktop/CBMF4761-final-project/BL")
-original_test_data <- read.csv("train_newick.csv")
+original_test_data <- read.csv("../Data/train_newick.csv")
 new_newick_tree_list <- sapply(seq(nrow(original_test_data)), function(x) convert_trit_to_newick_funct(x, original_test_data))
 
 #write out
-setwd("/Users/mayatalukdar/Desktop/")
 write.csv(new_newick_tree_list, "final_updated_train_newick.csv", row.names = FALSE)
   
   
