@@ -8,20 +8,92 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Read the test set ad predicted set:
+Read the test set and train set:
 ```{r}
 library(tidyverse)
 library(phangorn)
 library(phytools)
+train <- read.csv("DREAM_data_intMEMOIR_train.csv",stringsAsFactors=FALSE)
 test <- read.csv("DREAM_data_intMEMOIR_test.csv",stringsAsFactors=FALSE)
+head(test)
+```
+# 1. Extract parent-child pairs
+```{r}
+train.bl <- lapply(1:76, function(i) read.csv(sprintf("CBMF4761-final-project-master/Train_csv/%d.csv",i)))
+```
+Convert BL proportion into exact length:
+Combine into one df:
+
+```{r}
+train.bl[[1]]$parent <- as.character(train.bl[[1]]$parent)
+train.bl[[1]]$child <- as.character(train.bl[[1]]$child)
+depth <- nodeheight(all.ground.truth[[1]],node=1)
+train.bl[[1]]$pred_len <- train.bl[[1]]$pred_len * depth
+x <- train.bl[[1]]
+for (i in 2:76){
+  # pick parent-child pair that have all the 10 bits
+  train.bl[[i]]$parent <- as.character(train.bl[[i]]$parent)
+  train.bl[[i]]$child <- as.character(train.bl[[i]]$child)
+  depth <- nodeheight(all.ground.truth[[i]],node=1)
+  train.bl[[i]]$pred_len <- train.bl[[i]]$pred_len * depth
+  x <- rbind(x, train.bl[[i]])
+}
+# filter out barcodes with < 10 bits
+x <- x[(nchar(x$parent)==10)&(nchar(x$child)==10),]
+x
+```
+switch table (parent->child):
+p->c: x
+1->0: 1
+1->2: 2
+x= p * c
+```{r}
+# split into single bit
+parent <- matrix(unlist(strsplit(x$parent, '')), ncol = 10, byrow =T)#,      dimnames = list(barcode.set,NULL)
+child <- matrix(unlist(strsplit(x$child, '')), ncol = 10, byrow =T)#,      dimnames = list(barcode.set,NULL)
+compare <- matrix(0, nrow = nrow(x), ncol = 20)
+mut.count <- vector("integer", nrow(x))
+count1 <- 0
+count2 <- 0
+for(i in 1:nrow(x)){
+  for(j in 1:10){
+    if(parent[i,j]!=child[i,j]){
+      p <- switch(parent[i,j], "1"=1, "0"=0, "2"=0)
+      c <- switch(child[i,j], "1"=0, "0"=1, "2"=2)
+      y <- p*c # which type of change
+      #1->0: 1, 1->2: 2
+      if(y==1){count1=count1+1}else if(y==2){count2=count2+1}
+      if(y>0){compare[i,2*(j-1)+y] <- 1}
+    }
+  mut.count[[i]] <- count
+  }
+}
+count1/count2 # f(1->0)/f(1->2)
+```
+summarize type of mut:
+```{r}
+type.mut <- matrix(0, nrow = 10, ncol = 9)
+for(i in 1:nrow(x)){
+    for(j in 1:10){
+            p <- switch(parent[i,j], "1"=1, "0"=0, "2"=2)
+            c <- switch(child[i,j], "0"=0, "1"=1, "2"=2)
+            y <- 3*p+c+1 # which type of change
+            type.mut[j,y] <- type.mut[j,y]+1
+        }
+}
+colnames(type.mut) <- c('0->0','0->1','0->2','1->0','1->1','1->2','2->0','2->1','2->2')
+row.names(type.mut) <- paste('bit',1:10,sep='')
+type.mut
+# output
+write.csv(type.mut, "type_mut.csv")
+```
+# 2. Get the final RF table
+Read ground-truth, basline (rec) and predicted trees:
+```{r}
 pred.train <- read.csv("final_updated_train_newick.csv",stringsAsFactors=F)
 pred.test <- read.csv("final_updated_test_newick.csv",stringsAsFactors=F)
 pred.train.adj <- read.csv("final_updated_train_adj_newick.csv",stringsAsFactors=F)
 pred.test.adj <- read.csv("final_updated_test_adj_newick.csv",stringsAsFactors=F)
-head(test)
-```
-Read ground-truth, basline (rec) and predicted trees:
-```{r}
 test.gt <- read.newick(text = test$ground)
 test.rec <- read.newick(text = test$rec)
 test.pred <- read.newick(text=pred.test$x)
@@ -35,6 +107,7 @@ RF.gt.pred.adj <- sapply(1:length(test.gt), function(i) RF.dist(test.gt[[i]], te
 RF.rec.pred <- sapply(1:length(test.gt), function(i) RF.dist(test.pred[[i]], test.rec[[i]], normalize = T))
 RF.rec.pred.adj <- sapply(1:length(test.gt), function(i) RF.dist(test.rec[[i]], test.pred.adj[[i]], normalize = T))
 test.df <- data.frame(RF.gt.rec,RF.gt.pred, RF.gt.pred.adj, RF.rec.pred, RF.rec.pred.adj)
+# convert RF=0 to RF =1 due to the discrepancy in handling the extreme case of identical trees
 for(i in 1:5){
   for(j in 1:30){
     if(test.df[j,i]==0){test.df[j,i]<- 2}  # 0-.>2
@@ -94,218 +167,16 @@ for(i in 1:5){
 }
 head(train.df)
 ```
-```{r}
-RF.dist(test.pred[[3]],test.gt[[3]], normalize = T)
-plot(test.pred[[3]])
-plot(train.rec[[76]])
-plot(train.gt[[76]])
-```
-
+Example tree:
 ```{r}
 RF.dist(test.pred[[3]],test.gt[[3]], normalize = T)
 plot(test.pred[[3]])
 plot(test.rec[[3]])
 plot(test.gt[[3]])
 ```
+Save output:
 ```{r}
-RF.gt.pred
-```
-```{r}
-pred$x[[1]]
-```
-
-```{r}
-test$ground[[1]]
-```
-```{r}
-test$rec[[1]]
-```
-```{r}
-train.bl <- lapply(1:76, function(i) read.csv(sprintf("CBMF4761-final-project-master/Train_csv/%d.csv",i)))
-```
-Convert BL proportion into exact length:
-Combine into one df:
-
-```{r}
-train.bl[[1]]$parent <- as.character(train.bl[[1]]$parent)
-train.bl[[1]]$child <- as.character(train.bl[[1]]$child)
-depth <- nodeheight(all.ground.truth[[1]],node=1)
-train.bl[[1]]$pred_len <- train.bl[[1]]$pred_len * depth
-x <- train.bl[[1]]
-for (i in 2:76){
-  # pick parent-child pair that have all the 10 bits
-  train.bl[[i]]$parent <- as.character(train.bl[[i]]$parent)
-  train.bl[[i]]$child <- as.character(train.bl[[i]]$child)
-  depth <- nodeheight(all.ground.truth[[i]],node=1)
-  train.bl[[i]]$pred_len <- train.bl[[i]]$pred_len * depth
-  x <- rbind(x, train.bl[[i]])
-}
-# filter out barcodes with < 10 bits
-x <- x[(nchar(x$parent)==10)&(nchar(x$child)==10),]
-x
-```
-switch table (parent->child):
-p->c: x
-#0->0: 0
-1->0: 1
-#1->1: 2
-1->2: 2
-#2->2: 4
-x= p * c
-```{r}
-# split into single bit
-parent <- matrix(unlist(strsplit(x$parent, '')), ncol = 10, byrow =T)#,      dimnames = list(barcode.set,NULL)
-child <- matrix(unlist(strsplit(x$child, '')), ncol = 10, byrow =T)#,      dimnames = list(barcode.set,NULL)
-compare <- matrix(0, nrow = nrow(x), ncol = 20)
-mut.count <- vector("integer", nrow(x))
-count1 <- 0
-count2 <- 0
-for(i in 1:nrow(x)){
-  for(j in 1:10){
-    if(parent[i,j]!=child[i,j]){
-      p <- switch(parent[i,j], "1"=1, "0"=0, "2"=0)
-      c <- switch(child[i,j], "1"=0, "0"=1, "2"=2)
-      y <- p*c # which type of change
-      #1->0: 1, 1->2: 2
-      if(y==1){count1=count1+1}else if(y==2){count2=count2+1}
-      if(y>0){compare[i,2*(j-1)+y] <- 1}
-    }
-  mut.count[[i]] <- count
-  }
-}
-count1/count2 # f(1->0)/f(1->2)
-```
-summarize type of mut:
-```{r}
-type.mut <- matrix(0, nrow = 10, ncol = 9)
-for(i in 1:nrow(x)){
-    for(j in 1:10){
-            p <- switch(parent[i,j], "1"=1, "0"=0, "2"=2)
-            c <- switch(child[i,j], "0"=0, "1"=1, "2"=2)
-            y <- 3*p+c+1 # which type of change
-            type.mut[j,y] <- type.mut[j,y]+1
-        }
-}
-colnames(type.mut) <- c('0->0','0->1','0->2','1->0','1->1','1->2','2->0','2->1','2->2')
-row.names(type.mut) <- paste('bit',1:10,sep='')
-type.mut
-```
-pick single mut from compare:
-```{r}
-sum(rowSums(compare)==1)/nrow(compare)#47%
-sum(rowSums(compare)==2)/nrow(compare)#23%
-sum(rowSums(compare)==3)/nrow(compare)#16%
-sum(rowSums(compare)==4)/nrow(compare)#6%
-
-compare.m1 <- compare[which(rowSums(compare)==1),]
-len.m1 <- x$pred_len[which(rowSums(compare)==1)]
-hist(len.m1[which(compare.m1[,2]==0)],col=8, xlab = 'Length', main = '1->2 mutation at position 1')
-```
-```{r}
-for(k in 2:10){
-compare.x <- compare[which(rowSums(compare)<k),]
-len.x <- x$pred_len[which(rowSums(compare)<k)]
-compare.x <- data.frame(cbind(compare.x, len.x))
-colnames(compare.x)[ncol(compare.x)] <- 'y'
-fit <- lm(y ~ ., data = compare.x)
-print(sprintf("k=%d, r.squared=%.2f, adj.r.squared=%.2f",k, summary(fit)$r.squared, summary(fit)$adj.r.squared))
-}
-```
-
-Fit a lm on the 20 parameters:
-```{r}
-compare.x <- compare[which(rowSums(compare)<6),]
-len.x <- x$pred_len[which(rowSums(compare)<6)]
-compare.x <- data.frame(cbind(compare.x, len.x))
-colnames(compare.x)[ncol(compare.x)] <- 'y'
-fit <- lm(y ~ ., data = compare.x)
-summary(fit)
-```
-Convert coefficient into weight matrix:
-```{r}
-coef <- fit$coefficients[2:ncol(compare)]
-coef[is.na(coef)] <- 0
-weight <- matrix(0, nrow=2, ncol = 10)
-for(i in 0:(ncol(compare)-2)){
-  weight[i%%2+1, (i%/%2+1)] <- coef[i+1]
-}
-weight <- rbind(weight, colSums(weight))
-row.names(weight) <- c("1->0","1->2", "0->2")
-weight
-```
-Define a function to calculate the distance between 2 barcodes:
-```{r}
-distance <- function(a,b){
-  a.bit <- strsplit(a, '')
-  b.bit <- strsplit(b, '')
-  d <- sum(sapply(1:10, function(i){
-    x <- as.integer(b.bit[[1]][i])
-    y <- as.integer(a.bit[[1]][i])
-    if(x==y){0
-    }else if(abs(x-y)==2){weight[3,i]
-    }else if((x+y)==1){weight[1,i]
-    }else{weight[2,i]}}))
-  return(d)
-}
-```
-```{r}
-score_matrix <- rbind(c(0,1,2),c(1,0,1),c(2,1,0))
-score_matrix
-```
-
-
-Define a function to get distance matrix for a barcode set:
-```{r}
-all.barcodes[[1]]
-pair.alignment <- function(x, y){
-    #The inital state is 1111111111
-    score <- 0 # alignment score
-    for (i in 1:10){ # 10 bits
-        a <- as.integer(substr(x,i,i))
-        b <- as.integer(substr(y,i,i))
-        # 0->0 change corresponds to score_matrix[1,1]
-        score <- score + score_matrix[a+1,b+1]  # update score
-    }
-    return(score)
-}
-
-Tree.reconstruction <- function(barcodes){
-  l <- length(barcodes)
-  barcode.set <- str_sub(barcodes,-10,-1) # remove "id_"
-  m <- matrix(0, nrow = l, ncol = l)
-  for (i in 2:l){
-    for (j in 1:(i-1)){
-      m[i,j] <- pair.alignment(barcode.set[i], barcode.set[j])
-    }
-  }
-  m[upper.tri(m)] <- m[lower.tri(m)]
-  diag(m) <- max(m)+1
-  # generate row and col names for the distance matrix m
-  i <- 1:l
-  row.names(m) <- barcodes
-  colnames(m) <- barcodes
-  return(m)
-}
-t <- Tree.reconstruction(all.barcodes[[1]])
-t
-```
-
-```{r}
-up <- upgma(t, method = "average")
-plot(up)
-```
-```{r}
-RF.dist(up,all.ground.truth[[1]],normalize = T
-        )
-```
-
-```{r}
-plot(t)
-plot(test.ground.truth[[2]])
-RF.dist(t, test.ground.truth[[2]], normalize = T)
-```
-```{r}
-convert_tree_to_row_no_BL(t)
-
+write.csv(train_df, "train_RF.csv")
+write.csv(test_df, "test_RF.csv")
 ```
 
